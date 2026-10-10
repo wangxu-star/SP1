@@ -101,70 +101,29 @@ def die(msg):
 # ---------------------------------------------------------------------------
 
 def fetch_vpngate():
-    """同时获取官方 API 和 GitHub 镜像，合并去重。"""
-    all_rows = []
-    sources = []
-
-    # 获取官方 API
     try:
         log("VPN GATE", f"获取官方 API: {VPNGATE_API}")
-        resp = requests.get(
-            VPNGATE_API,
-            timeout=HTTP_TIMEOUT,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
+        resp = requests.get(VPNGATE_API, timeout=HTTP_TIMEOUT, headers={"User-Agent": "Mozilla/5.0 (compatible; gate-checker)"})
         resp.raise_for_status()
         rows = parse_csv(resp.text)
-        log("VPN GATE", f"官方 API 获取到 {len(rows)} 个原始节点")
-        all_rows.extend(rows)
         if rows:
-            sources.append("official")
+            log("VPN GATE", f"主源(官方 API) 获取到 {len(rows)} 个原始节点")
+            return rows, "vpngate.net/api/iphone"
+        raise RuntimeError("官方 API 返回 0 行数据")
     except Exception as exc:
         log("VPN GATE", f"官方 API 获取失败: {exc}")
 
-    # 同时获取镜像，不再只在官方 API 失败时使用
     try:
-        log("VPN GATE", f"获取备用镜像: {VPNGATE_MIRROR}")
-        resp = requests.get(
-            VPNGATE_MIRROR,
-            timeout=HTTP_TIMEOUT,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
+        log("VPN GATE", f"回退镜像: {VPNGATE_MIRROR}")
+        resp = requests.get(VPNGATE_MIRROR, timeout=HTTP_TIMEOUT, headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
         rows = parse_mirror_json(resp.json())
-        log("VPN GATE", f"镜像获取到 {len(rows)} 个原始节点")
-        all_rows.extend(rows)
         if rows:
-            sources.append("mirror")
+            log("VPN GATE", f"回退源(镜像) 获取到 {len(rows)} 个原始节点")
+            return rows, "github-mirror"
     except Exception as exc:
-        log("VPN GATE", f"备用镜像获取失败: {exc}")
-
-    # 按主机名和 IP 去重
-    merged = {}
-    for row in all_rows:
-        key = (
-            row["host"].strip().lower(),
-            row["ip"].strip(),
-        )
-        if key not in merged:
-            merged[key] = row
-        elif (
-            not merged[key].get("config_b64")
-            and row.get("config_b64")
-        ):
-            merged[key] = row
-
-    result = list(merged.values())
-    log(
-        "VPN GATE",
-        f"两个来源合并后共 {len(result)} 个节点（去重后）"
-    )
-
-    if not result:
-        die("官方 API 和备用镜像都没有获取到有效节点")
-
-    return result, "+".join(sources)
-
+        log("VPN GATE", f"回退镜像也失败: {exc}")
+    die("VPN Gate 官方 API 与回退镜像均不可用, 数据源完全失败")
 
 def parse_csv(text):
     lines = [ln for ln in text.splitlines() if ln.strip()]
