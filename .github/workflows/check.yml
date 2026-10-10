@@ -66,10 +66,14 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: 'public'
+          # 每次运行尝试使用唯一名称，避免重跑后同名产物冲突
+          name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Show site URL
         run: 'echo "site: https://wangxu-star.github.io/gate/ (deploy outcome: ${{ steps.deployment.outcome }})"'
